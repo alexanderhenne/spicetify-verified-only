@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Verified Only",
+    "description": "Auto-skip tracks from artists without the 'Verified by Spotify' badge - in practice, filters AI-generated music out of autoplay, radio, and the queue. Pair with the Verified Blocks dashboard (see README) for Pi-hole-style stats.",
+    "preview": "docs/full-window.png",
+    "main": "verified-only.js",
+    "readme": "README.md",
+    "authors": [{ "name": "alexanderhenne", "url": "https://github.com/alexanderhenne" }],
+    "tags": ["filter", "queue", "ai"]
+  }
+]
