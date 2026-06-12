@@ -154,6 +154,20 @@ function VerifiedBlocksApp() {
     return () => clearInterval(id);
   }, []);
 
+  // mark the currently visible blocked artists as seen; the extension shows a
+  // badge on the nav button for blocked artists not yet seen this way
+  useEffect(() => {
+    const seen = vbRead('verifiedOnly:seenBlockedArtists', {});
+    let changed = false;
+    for (const e of data.events.filter((ev) => ev.y !== 'play').slice(-25)) {
+      if (e.au && !seen[e.au]) {
+        seen[e.au] = Date.now();
+        changed = true;
+      }
+    }
+    if (changed) Spicetify.LocalStorage.set('verifiedOnly:seenBlockedArtists', JSON.stringify(seen));
+  }, [data]);
+
   const { stats, events, allowed, community } = data;
   const personalEntries = Object.entries(allowed).sort((a, b) => a[1].localeCompare(b[1]));
   const communityEntries = Object.entries(community.list ?? {}).sort((a, b) => a[1].localeCompare(b[1]));

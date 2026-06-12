@@ -216,5 +216,41 @@
   setInterval(pruneQueue, 15000); // safety net in case the event hook misses updates
   pruneQueue();
 
+  // --- Unseen-blocks badge on the dashboard's nav button ---
+  // The dashboard marks artists as seen when they appear in its Recent blocks
+  // list during a visit; the badge counts recently blocked artists not seen yet.
+  const SEEN_KEY = 'verifiedOnly:seenBlockedArtists';
+  const RECENT_BLOCKS = 25; // matches the dashboard's Recent blocks window
+
+  function unseenBlockedCount() {
+    const seen = readJSON(SEEN_KEY, {});
+    const recent = readJSON(EVENTS_KEY, []).filter((e) => e.y !== 'play').slice(-RECENT_BLOCKS);
+    return new Set(recent.filter((e) => e.au && !seen[e.au]).map((e) => e.au)).size;
+  }
+
+  function updateBadge() {
+    const btn = document.querySelector('button[aria-label="Verified Blocks"]');
+    if (!btn) return;
+    let badge = btn.querySelector('.verified-only-badge');
+    const n = unseenBlockedCount();
+    if (n === 0) {
+      badge?.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'verified-only-badge';
+      badge.style.cssText =
+        'position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;' +
+        'background:#dd4b39;color:#fff;font-size:10px;font-weight:700;line-height:16px;' +
+        'text-align:center;padding:0 3px;box-sizing:border-box;pointer-events:none;';
+      if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative';
+      btn.appendChild(badge);
+    }
+    badge.textContent = n > 9 ? '9+' : String(n);
+  }
+  setInterval(updateBadge, 5000);
+  updateBadge();
+
   console.log('[verified-only] active');
 })();
