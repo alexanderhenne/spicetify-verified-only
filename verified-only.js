@@ -26,6 +26,23 @@
   }
   const saveCache = () => Spicetify.LocalStorage.set(CACHE_KEY, JSON.stringify(cache));
 
+  // The verdict cache is the only structure that grows with every artist ever
+  // played; prune expired entries at startup and cap its size (newest kept) so
+  // it can't crowd the localStorage quota shared with Spotify's own client.
+  const CACHE_MAX_ENTRIES = 10000;
+  {
+    const now = Date.now();
+    let entries = Object.entries(cache).filter(([, e]) => now - e.t < CACHE_TTL_MS);
+    if (entries.length > CACHE_MAX_ENTRIES) {
+      entries.sort((a, b) => b[1].t - a[1].t);
+      entries = entries.slice(0, CACHE_MAX_ENTRIES);
+    }
+    if (entries.length !== Object.keys(cache).length) {
+      cache = Object.fromEntries(entries);
+      saveCache();
+    }
+  }
+
   const notify = (msg) => {
     try {
       Spicetify.showNotification(msg);
