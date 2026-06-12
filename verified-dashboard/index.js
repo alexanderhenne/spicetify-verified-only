@@ -31,6 +31,8 @@ const VB_CSS = `
 .vb-barrow .vb-bar { flex: 1; height: 14px; background: rgba(255,255,255,.08); border-radius: 7px; overflow: hidden; }
 .vb-barrow .vb-bar > div { height: 100%; background: #dd4b39; }
 .vb-empty { opacity: .5; font-size: 13px; }
+.vb-artist-link { cursor: pointer; }
+.vb-artist-link:hover { text-decoration: underline; }
 .vb-btn { background: #00a65a; border: none; color: #fff; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; cursor: pointer; }
 .vb-btn:hover { opacity: .85; }
 .vb-btn:disabled { opacity: .4; cursor: default; }
@@ -105,6 +107,10 @@ function VerifiedBlocksApp() {
     saveAllowed(next);
     Spicetify.showNotification(`${name ?? uri} no longer allowed`);
   };
+  const openArtist = (uri) => Spicetify.Platform.History.push('/artist/' + uri.split(':')[2]);
+  const artistName = (uri, name) => uri
+    ? h('span', { className: 'vb-artist-link', onClick: () => openArtist(uri) }, name ?? '-')
+    : (name ?? '-');
   const suggestUrl = (uri, name) =>
     'https://github.com/alexanderhenne/spicetify-verified-only/issues/new' +
     '?template=community-allowlist-request.yml' +
@@ -253,7 +259,7 @@ function VerifiedBlocksApp() {
                 h('td', null, h('span', { className: 'vb-badge ' + (e.y === 'skip' ? 'vb-badge-skip' : 'vb-badge-prune') },
                   e.y === 'skip' ? 'SKIPPED' : 'DEQUEUED')),
                 h('td', null, e.tr ?? '-'),
-                h('td', null, e.ar ?? '-'),
+                h('td', null, artistName(e.au, e.ar)),
                 h('td', null, !e.au ? null
                   : allowed[e.au]
                     ? h('button', { className: 'vb-btn vb-btn-ghost', onClick: () => removeArtist(e.au) }, 'Disallow')
@@ -269,7 +275,7 @@ function VerifiedBlocksApp() {
         ? h('div', { className: 'vb-empty' }, 'No allowed artists. Use "Allow" on a recent block, or paste an artist link below.')
         : personalEntries.map(([uri, name]) =>
             h('div', { className: 'vb-wl-row', key: uri },
-              h('span', { className: 'vb-name', style: { flex: 1 } }, name),
+              h('span', { className: 'vb-name', style: { flex: 1 } }, artistName(uri, name)),
               h('button', { className: 'vb-btn vb-btn-ghost', onClick: () => window.open(suggestUrl(uri, name)) }, 'Suggest'),
               h('button', { className: 'vb-btn vb-btn-danger', onClick: () => removeArtist(uri) }, 'Remove'))),
       h('div', { className: 'vb-wl-add' },
@@ -313,7 +319,7 @@ function VerifiedBlocksApp() {
                 const visible = q ? communityEntries.filter(([, name]) => name.toLowerCase().includes(q)) : communityEntries;
                 const rows = visible.slice(0, MAX_ROWS).map(([uri, name]) =>
                   h('div', { className: 'vb-wl-row', key: uri },
-                    h('span', { className: 'vb-name', style: { flex: 1 } }, name)));
+                    h('span', { className: 'vb-name', style: { flex: 1 } }, artistName(uri, name))));
                 if (visible.length > MAX_ROWS) {
                   rows.push(h('div', { className: 'vb-empty', key: '__more', style: { marginTop: '8px' } },
                     `…and ${visible.length - MAX_ROWS} more - type to filter`));
