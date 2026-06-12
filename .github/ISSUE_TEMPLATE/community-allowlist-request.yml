@@ -1,0 +1,29 @@
+name: Community allowlist request
+description: Suggest a real artist who doesn't have the Verified by Spotify badge yet
+title: "[Allowlist] <artist name>"
+labels: [community-allowlist]
+body:
+  - type: input
+    id: artist-link
+    attributes:
+      label: Spotify artist link
+      placeholder: https://open.spotify.com/artist/...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence the artist is a real person or group
+      description: >
+        Links that establish a real-world presence: live performance footage,
+        interviews, press coverage, a label page, or social accounts with
+        real history. The more independent the sources, the better.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I checked the artist's Spotify profile and it does not currently show the Verified by Spotify badge
+          required: true

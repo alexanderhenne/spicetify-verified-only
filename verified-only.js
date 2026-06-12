@@ -50,7 +50,35 @@
   // User-allowed artists: { artistUri: artistName }, managed from the dashboard.
   // Checked before the verified verdict, so it overrides cached blocks immediately.
   const ALLOWED_KEY = 'verifiedOnly:allowed';
-  const isAllowed = (artistUri) => !!readJSON(ALLOWED_KEY, {})[artistUri];
+
+  // Community allowlist: curated in the GitHub repo (community-allowed.json),
+  // contributed via pull requests, refreshed daily. Same shape as the personal
+  // list.
+  const COMMUNITY_KEY = 'verifiedOnly:community';
+  const COMMUNITY_URL =
+    'https://cdn.jsdelivr.net/gh/alexanderhenne/spicetify-verified-only@main/community-allowed.json';
+  const COMMUNITY_TTL_MS = 24 * 60 * 60 * 1000;
+
+  async function refreshCommunityList() {
+    const cached = readJSON(COMMUNITY_KEY, { t: 0, list: {} });
+    if (Date.now() - cached.t < COMMUNITY_TTL_MS) return;
+    try {
+      const res = await fetch(COMMUNITY_URL);
+      if (!res.ok) return;
+      const list = await res.json();
+      if (list && typeof list === 'object' && !Array.isArray(list)) {
+        Spicetify.LocalStorage.set(COMMUNITY_KEY, JSON.stringify({ t: Date.now(), list }));
+      }
+    } catch {
+      // offline or CDN hiccup - keep whatever is cached
+    }
+  }
+  refreshCommunityList();
+  setInterval(refreshCommunityList, 60 * 60 * 1000); // staleness re-check, fetches at most daily
+
+  const isAllowed = (artistUri) =>
+    !!readJSON(ALLOWED_KEY, {})[artistUri] ||
+    !!readJSON(COMMUNITY_KEY, { list: {} }).list?.[artistUri];
 
   // type: 'play' | 'skip' (now-playing skipped) | 'prune' (removed from queue)
   function logEvent(type, meta) {

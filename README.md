@@ -22,6 +22,9 @@ filters AI-generated music out of your autoplay, radio, and queue.
 - **Allowed artists** - real artists the badge has missed can be allowed permanently: click
   "Allow" on a recent block, or paste an artist link in the dashboard. Allowed artists are
   never blocked.
+- **Community allowlist** - a curated, crowd-sourced list of real-but-unverified artists
+  ([`community-allowed.json`](community-allowed.json)), refreshed daily. Contribute via
+  [pull request or issue](CONTRIBUTING.md); entries require evidence the artist is real.
 
 Verdicts are cached for 7 days (one lookup per artist), and the filter **fails open**: if a
 lookup errors or Spotify changes the schema, nothing is blocked. Local files and podcasts are

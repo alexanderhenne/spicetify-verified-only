@@ -22,6 +22,7 @@ const VB_CSS = `
 .vb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .vb-table th { text-align: left; opacity: .55; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.12); }
 .vb-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.vb-table th:last-child, .vb-table td:last-child { text-align: right; padding-right: 0; }
 .vb-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .vb-badge-skip { background: #dd4b39; }
 .vb-badge-prune { background: #f39c12; }
@@ -35,6 +36,8 @@ const VB_CSS = `
 .vb-btn:disabled { opacity: .4; cursor: default; }
 .vb-btn-danger { background: #dd4b39; }
 .vb-btn-ghost { background: rgba(255,255,255,.12); }
+.vb-sec-head { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); font-weight: 600; font-size: 13px; }
+.vb-caret { width: 12px; opacity: .7; }
 .vb-wl-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
 .vb-wl-add { display: flex; gap: 10px; margin-top: 14px; }
 .vb-wl-add input { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: inherit; padding: 6px 10px; font-size: 13px; }
@@ -57,11 +60,35 @@ function VerifiedBlocksApp() {
     stats: vbRead('verifiedOnly:stats', { plays: 0, blocks: 0, byArtist: {} }),
     events: vbRead('verifiedOnly:events', []),
     allowed: vbRead('verifiedOnly:allowed', {}),
+    community: vbRead('verifiedOnly:community', { t: 0, list: {} }),
   });
 
   const [data, setData] = useState(load);
   const [addValue, setAddValue] = useState('');
   const [addBusy, setAddBusy] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
+  const [communityFilter, setCommunityFilter] = useState('');
+  const [refreshBusy, setRefreshBusy] = useState(false);
+
+  // manual fetch bypasses the extension's daily TTL (jsDelivr may still serve
+  // its edge cache, so brand-new merges can take a few hours to appear)
+  async function refetchCommunity() {
+    setRefreshBusy(true);
+    try {
+      const res = await fetch(
+        'https://cdn.jsdelivr.net/gh/alexanderhenne/spicetify-verified-only@main/community-allowed.json',
+        { cache: 'no-cache' }
+      );
+      const list = res.ok ? await res.json() : null;
+      if (!list || typeof list !== 'object' || Array.isArray(list)) throw new Error();
+      Spicetify.LocalStorage.set('verifiedOnly:community', JSON.stringify({ t: Date.now(), list }));
+      setData(load());
+      Spicetify.showNotification('Community list refreshed');
+    } catch {
+      Spicetify.showNotification('Could not fetch the community list');
+    }
+    setRefreshBusy(false);
+  }
 
   const saveAllowed = (next) => {
     Spicetify.LocalStorage.set('verifiedOnly:allowed', JSON.stringify(next));
@@ -78,6 +105,11 @@ function VerifiedBlocksApp() {
     saveAllowed(next);
     Spicetify.showNotification(`${name ?? uri} no longer allowed`);
   };
+  const suggestUrl = (uri, name) =>
+    'https://github.com/alexanderhenne/spicetify-verified-only/issues/new' +
+    '?template=community-allowlist-request.yml' +
+    '&title=' + encodeURIComponent('[Allowlist] ' + name) +
+    '&artist-link=' + encodeURIComponent('https://open.spotify.com/artist/' + uri.split(':')[2]);
 
   async function addByLink() {
     const m = addValue.match(/artist[/:]([A-Za-z0-9]{22})/);
@@ -86,6 +118,16 @@ function VerifiedBlocksApp() {
       return;
     }
     const uri = 'spotify:artist:' + m[1];
+    if (data.allowed[uri]) {
+      Spicetify.showNotification(`${data.allowed[uri]} is already in your allowed artists`);
+      setAddValue('');
+      return;
+    }
+    if (data.community.list?.[uri]) {
+      Spicetify.showNotification(`${data.community.list[uri]} is already on the community list`);
+      setAddValue('');
+      return;
+    }
     setAddBusy(true);
     try {
       const res = await Spicetify.GraphQL.Request(
@@ -106,8 +148,10 @@ function VerifiedBlocksApp() {
     return () => clearInterval(id);
   }, []);
 
-  const { stats, events, allowed } = data;
-  const allowedEntries = Object.entries(allowed).sort((a, b) => a[1].localeCompare(b[1]));
+  const { stats, events, allowed, community } = data;
+  const personalEntries = Object.entries(allowed).sort((a, b) => a[1].localeCompare(b[1]));
+  const communityEntries = Object.entries(community.list ?? {}).sort((a, b) => a[1].localeCompare(b[1]));
+  const isAllowedAnywhere = (uri) => !!allowed[uri] || !!community.list?.[uri];
   const total = stats.plays + stats.blocks;
   const rate = total ? ((stats.blocks / total) * 100).toFixed(1) : '0.0';
 
@@ -210,19 +254,23 @@ function VerifiedBlocksApp() {
                   e.y === 'skip' ? 'SKIPPED' : 'DEQUEUED')),
                 h('td', null, e.tr ?? '-'),
                 h('td', null, e.ar ?? '-'),
-                h('td', null, !e.au ? null : allowed[e.au]
-                  ? h('button', { className: 'vb-btn vb-btn-ghost', onClick: () => removeArtist(e.au) }, 'Disallow')
-                  : h('button', { className: 'vb-btn', onClick: () => allowArtist(e.au, e.ar) }, 'Allow'))))))),
+                h('td', null, !e.au ? null
+                  : allowed[e.au]
+                    ? h('button', { className: 'vb-btn vb-btn-ghost', onClick: () => removeArtist(e.au) }, 'Disallow')
+                    : isAllowedAnywhere(e.au)
+                      ? h('button', { className: 'vb-btn vb-btn-ghost', disabled: true, title: 'Allowed by the community list' }, 'Allowed')
+                      : h('button', { className: 'vb-btn', onClick: () => allowArtist(e.au, e.ar) }, 'Allow'))))))),
 
     h('div', { className: 'vb-panel' },
       h('h2', null, 'Allowed artists'),
       h('div', { className: 'vb-sub', style: { marginBottom: '10px' } },
         'Allowed artists are never blocked, even without the Verified badge - for real artists the badge has missed.'),
-      allowedEntries.length === 0
+      personalEntries.length === 0
         ? h('div', { className: 'vb-empty' }, 'No allowed artists. Use "Allow" on a recent block, or paste an artist link below.')
-        : allowedEntries.map(([uri, name]) =>
+        : personalEntries.map(([uri, name]) =>
             h('div', { className: 'vb-wl-row', key: uri },
               h('span', { className: 'vb-name', style: { flex: 1 } }, name),
+              h('button', { className: 'vb-btn vb-btn-ghost', onClick: () => window.open(suggestUrl(uri, name)) }, 'Suggest'),
               h('button', { className: 'vb-btn vb-btn-danger', onClick: () => removeArtist(uri) }, 'Remove'))),
       h('div', { className: 'vb-wl-add' },
         h('input', {
@@ -232,5 +280,47 @@ function VerifiedBlocksApp() {
           onChange: (e) => setAddValue(e.target.value),
           onKeyDown: (e) => { if (e.key === 'Enter') addByLink(); },
         }),
-        h('button', { className: 'vb-btn vb-wl-addbtn', disabled: addBusy, onClick: addByLink }, addBusy ? '…' : 'Add'))));
+        h('button', { className: 'vb-btn vb-wl-addbtn', disabled: addBusy, onClick: addByLink }, addBusy ? '…' : 'Add')),
+
+      // community list: collapsed sub-section; entries can be overridden, or
+      // promoted to the personal list when the community list is disabled
+      h('div', { className: 'vb-sec-head', onClick: () => setCommunityOpen(!communityOpen) },
+        h('span', { className: 'vb-caret' }, communityOpen ? '▾' : '▸'),
+        h('span', { style: { flex: 1 } },
+          (n => `Community list (${n} artist${n === 1 ? '' : 's'})`)(Object.keys(community.list ?? {}).length))),
+      !communityOpen ? null : h('div', null,
+        h('div', { className: 'vb-wl-row', style: { opacity: 0.8 } },
+          h('span', { style: { flex: 1, fontSize: '12px' } },
+            community.t ? 'Last fetched ' + fmtDay(community.t) + ' ' + fmtTime(community.t) : 'Not fetched yet'),
+          h('button', { className: 'vb-btn vb-btn-ghost vb-refresh', disabled: refreshBusy, onClick: refetchCommunity },
+            refreshBusy ? '…' : 'Refresh')),
+        communityEntries.length === 0
+          ? h('div', { className: 'vb-empty', style: { marginTop: '8px' } }, 'The community list is empty.')
+          : h('div', null,
+              communityEntries.length > 10
+                ? h('input', {
+                    className: 'vb-wl-input',
+                    style: { width: '100%', margin: '8px 0', boxSizing: 'border-box' },
+                    placeholder: 'Filter artists…',
+                    value: communityFilter,
+                    onChange: (e) => setCommunityFilter(e.target.value),
+                  })
+                : null,
+              ...(() => {
+                // cap rendered rows: with a large list, only matches are shown
+                const MAX_ROWS = 50;
+                const q = communityFilter.trim().toLowerCase();
+                const visible = q ? communityEntries.filter(([, name]) => name.toLowerCase().includes(q)) : communityEntries;
+                const rows = visible.slice(0, MAX_ROWS).map(([uri, name]) =>
+                  h('div', { className: 'vb-wl-row', key: uri },
+                    h('span', { className: 'vb-name', style: { flex: 1 } }, name)));
+                if (visible.length > MAX_ROWS) {
+                  rows.push(h('div', { className: 'vb-empty', key: '__more', style: { marginTop: '8px' } },
+                    `…and ${visible.length - MAX_ROWS} more - type to filter`));
+                }
+                if (visible.length === 0) {
+                  rows.push(h('div', { className: 'vb-empty', key: '__none', style: { marginTop: '8px' } }, 'No artists match.'));
+                }
+                return rows;
+              })()))));
 }
